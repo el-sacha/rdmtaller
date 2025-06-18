@@ -135,11 +135,11 @@ $main_js_check_path_from_footer = dirname(__FILE__) . '/../assets/js/main.js';
 
 
 ?>
-<script src="<?php echo $final_bootstrap_js_path; ?>"></script>
-<script src="<?php echo $final_chart_js_path; ?>"></script>
+<script src="<?php echo $final_bootstrap_js_path; ?>" defer></script>
+<script src="<?php echo $final_chart_js_path; ?>" defer></script>
 
 <?php if (file_exists($main_js_check_path_from_footer)): ?>
-    <script src="<?php echo $final_custom_js_path; ?>"></script>
+    <script src="<?php echo $final_custom_js_path; ?>" defer></script>
 <?php endif; ?>
 </body>
 </html>
