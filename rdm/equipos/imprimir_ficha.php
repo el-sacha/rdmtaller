@@ -190,6 +190,10 @@ $assets_path_prefix = '../assets';
 
         if (guardarBtn && signaturePadContainer) { // Verificar signaturePadContainer para equipoId
             guardarBtn.addEventListener('click', function () {
+                if (!equipoId || parseInt(equipoId, 10) <= 0) {
+                    alert('Error: No se pudo obtener el ID del equipo para guardar la firma. Recargue la página.');
+                    return;
+                }
                 if (!signaturePad || signaturePad.isEmpty()) {
                     alert("Por favor, provea una firma primero.");
                 } else {
@@ -223,6 +227,10 @@ $assets_path_prefix = '../assets';
 
         if (borrarBtn && signaturePadContainer) {
              borrarBtn.addEventListener('click', function () {
+                if (!equipoId || parseInt(equipoId, 10) <= 0) {
+                    alert('Error: No se pudo obtener el ID del equipo para borrar la firma. Recargue la página.');
+                    return;
+                }
                 if (!confirm("¿Está seguro de que desea borrar la firma existente?")) return;
                 fetch('borrar_firma.php', {
                     method: 'POST',
