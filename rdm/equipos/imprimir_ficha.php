@@ -1,21 +1,20 @@
 <?php
 // equipos/imprimir_ficha.php
 require_once '../includes/funciones.php';
-require_once '../includes/db.php';
+require_once '../includes/db.php'; // $enlace
 
-verificar_login(); // Opcional: decidir si la ficha impresa requiere login para verse post-generación
+// verificar_login(); // Descomentado para que el cliente pueda verla si tiene el link.
+                     // Considerar un token de acceso único si se quiere seguridad sin login.
 
 $equipo_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($equipo_id <= 0) {
-    // Considerar redirigir a una página de error o al listado de equipos
     die("Error: ID de equipo no válido.");
 }
 
+// Fetch equipo data, including firma_cliente_base64
 $sql = "SELECT
-            e.id AS equipo_id, e.tipo_equipo, e.marca, e.modelo, e.numero_serie_imei,
-            e.fallas_reportadas, e.estado_fisico, e.observaciones, e.accesorios_entregados,
-            e.fecha_ingreso,
+            e.*,
             c.nombre AS cliente_nombre, c.dni AS cliente_dni, c.telefono AS cliente_telefono, c.email AS cliente_email,
             t.nombre AS tecnico_nombre,
             er.nombre_estado AS estado_actual
@@ -26,25 +25,20 @@ $sql = "SELECT
         WHERE e.id = ?";
 
 $stmt = mysqli_prepare($enlace, $sql);
-if (!$stmt) {
-    die("Error al preparar la consulta: " . mysqli_error($enlace));
-}
-
+if (!$stmt) die("Error al preparar la consulta: " . mysqli_error($enlace));
 mysqli_stmt_bind_param($stmt, "i", $equipo_id);
 mysqli_stmt_execute($stmt);
 $resultado = mysqli_stmt_get_result($stmt);
 $equipo = mysqli_fetch_assoc($resultado);
 mysqli_stmt_close($stmt);
 
-if (!$equipo) {
-    die("Ficha de equipo no encontrada. ID: " . htmlspecialchars($equipo_id));
-}
+if (!$equipo) die("Ficha de equipo no encontrada. ID: " . htmlspecialchars($equipo_id));
 
-// mysqli_close($enlace); // Cerrar si no se usa en un footer incluido
-
-// Para la visualización de la fecha en formato local
 $fecha_ingreso_formateada = date("d/m/Y H:i:s", strtotime($equipo['fecha_ingreso']));
 
+// Determinar path para JS assets (signature_pad.umd.min.js)
+// Asumiendo que imprimir_ficha.php está en rdm/equipos/ y assets en rdm/assets/
+$assets_path_prefix = '../assets';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -52,37 +46,46 @@ $fecha_ingreso_formateada = date("d/m/Y H:i:s", strtotime($equipo['fecha_ingreso
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ficha de Ingreso Equipo N° <?php echo htmlspecialchars($equipo['equipo_id']); ?></title>
+    <!-- Incluir Bootstrap CSS si se desea un estilo más allá del básico para impresión -->
+    <link href="<?php echo $assets_path_prefix; ?>/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #fff; color: #000; }
-        .container-ficha { width: 800px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; background-color: #fff; }
-        h1, h2, h3 { text-align: center; margin-top: 5px; margin-bottom:15px;}
-        h1 { font-size: 24px; }
-        h2 { font-size: 20px; }
-        .header-info { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom:10px;}
-        .header-info div { width: 48%; }
-        .section { margin-bottom: 20px; padding:10px; border: 1px solid #eee; border-radius:4px;}
-        .section h3 { text-align:left; margin-bottom:10px; background-color:#f2f2f2; padding:5px; border-radius:3px;}
-        .section p { margin: 5px 0; line-height:1.6;}
-        .section p strong { display: inline-block; min-width: 150px; }
-        .firma-section { margin-top: 40px; padding-top: 20px; border-top: 1px dashed #ccc; text-align:center;}
-        .firma-linea { width: 300px; border-bottom: 1px solid #000; margin: 40px auto 5px auto; }
-        .print-button { display: block; width: 100px; margin: 20px auto; padding: 10px; background-color: #007bff; color: white; text-align: center; border: none; border-radius: 5px; cursor: pointer; text-decoration:none; }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container-ficha { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; }
+        h1 { font-size: 24px; margin-bottom: 5px; }
+        h2 { font-size: 20px; margin-bottom: 20px; color: #555; }
+        .header-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom:10px; border-bottom:1px solid #eee;}
+        .section { margin-bottom: 15px; padding-bottom:10px; border-bottom:1px dashed #eee;}
+        .section:last-of-type { border-bottom: none; }
+        .section h3 { font-size: 16px; margin-bottom: 8px; color: #333; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;}
+        .section p { margin: 2px 0; line-height:1.5;}
+        .section p strong { display: inline-block; min-width: 140px; color:#444; }
+
+        #signature-pad-container { margin-top: 20px; text-align: center; }
+        #signature-canvas { border: 1px solid #000; cursor: crosshair; }
+        .signature-image { max-width: 350px; max-height: 150px; border: 1px solid #eee; margin: 10px auto; display:block; }
+        .firma-actions button { margin: 5px; }
+
+        .print-button-container { text-align: center; margin-top: 20px; }
+        .print-button { padding: 10px 20px; font-size: 16px; }
 
         @media print {
-            body { background-color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .container-ficha { width: 100%; margin: 0; padding: 0; border: none; }
-            .print-button { display: none; }
-            /* Estilos adicionales para impresión si son necesarios */
+            body { background-color: #fff; margin: 0; }
+            .container-ficha { width: 100%; margin: 0; padding: 0; border: none; box-shadow:none; }
+            .print-button-container, .firma-actions, .no-print { display: none !important; }
+            #signature-pad-container { margin-top:5px; page-break-inside: avoid; } /* Evitar corte de página en la firma */
+            .signature-image { max-width: 300px; max-height: 120px; }
+             h1, h2, h3 {margin-bottom:8px;}
         }
     </style>
 </head>
 <body>
-    <div class="container-ficha">
+    <div class="container-ficha" id="printable-area">
         <h1>RDM - Reparación de Dispositivos Móviles</h1>
         <h2>Comprobante de Recepción de Equipo</h2>
 
         <div class="header-info">
-            <div><strong>Nº de Orden:</strong> <?php echo htmlspecialchars($equipo['equipo_id']); ?></div>
+            <div><strong>Nº Orden:</strong> <?php echo htmlspecialchars($equipo['equipo_id']); ?></div>
             <div><strong>Fecha Recepción:</strong> <?php echo $fecha_ingreso_formateada; ?></div>
         </div>
 
@@ -91,40 +94,160 @@ $fecha_ingreso_formateada = date("d/m/Y H:i:s", strtotime($equipo['fecha_ingreso
             <p><strong>Nombre:</strong> <?php echo htmlspecialchars($equipo['cliente_nombre']); ?></p>
             <p><strong>DNI/CIF:</strong> <?php echo htmlspecialchars($equipo['cliente_dni']); ?></p>
             <p><strong>Teléfono:</strong> <?php echo htmlspecialchars($equipo['cliente_telefono'] ?? '-'); ?></p>
-            <p><strong>Email:</strong> <?php echo htmlspecialchars($equipo['cliente_email'] ?? '-'); ?></p>
         </div>
 
         <div class="section">
             <h3>Datos del Equipo</h3>
             <p><strong>Tipo:</strong> <?php echo htmlspecialchars($equipo['tipo_equipo']); ?></p>
-            <p><strong>Marca:</strong> <?php echo htmlspecialchars($equipo['marca']); ?></p>
-            <p><strong>Modelo:</strong> <?php echo htmlspecialchars($equipo['modelo']); ?></p>
+            <p><strong>Marca:</strong> <?php echo htmlspecialchars($equipo['marca']); ?> <strong>Modelo:</strong> <?php echo htmlspecialchars($equipo['modelo']); ?></p>
             <p><strong>Nº Serie/IMEI:</strong> <?php echo htmlspecialchars($equipo['numero_serie_imei'] ?? 'No especificado'); ?></p>
         </div>
 
         <div class="section">
             <h3>Diagnóstico y Estado</h3>
-            <p><strong>Fallas Reportadas:</strong><br><?php echo nl2br(htmlspecialchars($equipo['fallas_reportadas'])); ?></p>
-            <p><strong>Estado Físico (al ingreso):</strong><br><?php echo nl2br(htmlspecialchars($equipo['estado_fisico'] ?? 'No especificado')); ?></p>
-            <p><strong>Accesorios Entregados:</strong><br><?php echo nl2br(htmlspecialchars($equipo['accesorios_entregados'] ?? 'Ninguno')); ?></p>
-            <p><strong>Observaciones (uso interno):</strong><br><?php echo nl2br(htmlspecialchars($equipo['observaciones'] ?? 'Ninguna')); ?></p>
+            <p><strong>Fallas Reportadas:</strong> <?php echo nl2br(htmlspecialchars($equipo['fallas_reportadas'])); ?></p>
+            <p><strong>Estado Físico (al ingreso):</strong> <?php echo nl2br(htmlspecialchars($equipo['estado_fisico'] ?? 'No especificado')); ?></p>
+            <p><strong>Accesorios Entregados:</strong> <?php echo nl2br(htmlspecialchars($equipo['accesorios_entregados'] ?? 'Ninguno')); ?></p>
         </div>
 
         <div class="section">
-            <h3>Asignación y Estado Actual</h3>
+            <h3>Asignación y Estado Inicial</h3>
              <p><strong>Técnico Asignado:</strong> <?php echo htmlspecialchars($equipo['tecnico_nombre'] ?? 'No asignado'); ?></p>
-             <p><strong>Estado Actual del Equipo:</strong> <?php echo htmlspecialchars($equipo['estado_actual'] ?? 'Indefinido'); ?></p>
+             <p><strong>Estado Inicial:</strong> <?php echo htmlspecialchars($equipo['estado_actual'] ?? 'Indefinido'); ?></p>
         </div>
 
-        <div class="firma-section">
-            <div class="firma-linea"></div>
-            <p>Firma del Cliente</p>
+        <div id="signature-pad-container" data-equipo-id="<?php echo $equipo['equipo_id']; ?>">
+            <h3>Firma del Cliente:</h3>
+            <?php if (!empty($equipo['firma_cliente_base64'])): ?>
+                <div id="firma-existente">
+                    <img src="<?php echo htmlspecialchars($equipo['firma_cliente_base64']); ?>" alt="Firma del Cliente" class="signature-image">
+                    <div class="firma-actions no-print">
+                        <button id="borrar-firma-btn" class="btn btn-sm btn-danger">Borrar Firma y Volver a Firmar</button>
+                    </div>
+                </div>
+                <div id="canvas-container" style="display:none;">
+                     <canvas id="signature-canvas" width="350" height="150"></canvas>
+                     <div class="firma-actions no-print mt-2">
+                        <button id="guardar-firma-btn" class="btn btn-sm btn-primary">Guardar Firma</button>
+                        <button id="limpiar-firma-btn" class="btn btn-sm btn-secondary">Limpiar</button>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div id="canvas-container">
+                    <canvas id="signature-canvas" width="350" height="150"></canvas>
+                    <div class="firma-actions no-print mt-2">
+                        <button id="guardar-firma-btn" class="btn btn-sm btn-primary">Guardar Firma</button>
+                        <button id="limpiar-firma-btn" class="btn btn-sm btn-secondary">Limpiar</button>
+                    </div>
+                </div>
+                 <div id="firma-existente" style="display:none;">
+                    <img src="" alt="Firma del Cliente" class="signature-image">
+                     <div class="firma-actions no-print">
+                        <button id="borrar-firma-btn" class="btn btn-sm btn-danger">Borrar Firma y Volver a Firmar</button>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
-
-        <button onclick="window.print();" class="print-button">Imprimir Ficha</button>
-        <p style="text-align:center; font-size:12px; margin-top:20px;">
-            Gracias por confiar en RDM. Conservar este comprobante.
-        </p>
+         <p class="text-center small mt-3">Declaro conocer y aceptar los términos y condiciones del servicio técnico.</p>
     </div>
+
+    <div class="print-button-container no-print">
+        <button onclick="window.print();" class="btn btn-primary print-button">Imprimir Ficha</button>
+        <a href="listar_equipos.php" class="btn btn-secondary print-button">Volver al Listado</a>
+    </div>
+
+    <script src="<?php echo $assets_path_prefix; ?>/js/signature_pad.umd.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const canvas = document.getElementById('signature-canvas');
+        const signaturePadContainer = document.getElementById('signature-pad-container');
+        const equipoId = signaturePadContainer.dataset.equipoId;
+        const guardarBtn = document.getElementById('guardar-firma-btn');
+        const limpiarBtn = document.getElementById('limpiar-firma-btn');
+        const borrarBtn = document.getElementById('borrar-firma-btn');
+        const firmaExistenteDiv = document.getElementById('firma-existente');
+        const canvasContainerDiv = document.getElementById('canvas-container');
+        let signaturePad = null;
+
+        function initializeSignaturePad() {
+            if (canvas && !signaturePad) { // Solo inicializar si el canvas está visible y no hay instancia
+                 signaturePad = new SignaturePad(canvas, {
+                    backgroundColor: 'rgb(255, 255, 255)' // Fondo blanco
+                });
+            }
+        }
+
+        // Inicializar si el canvas está visible al cargar (no hay firma previa)
+        if (canvasContainerDiv && window.getComputedStyle(canvasContainerDiv).display !== 'none') {
+            initializeSignaturePad();
+        }
+
+        if (limpiarBtn && signaturePad) {
+            limpiarBtn.addEventListener('click', function () {
+                signaturePad.clear();
+            });
+        }
+
+        if (guardarBtn && signaturePadContainer) { // Verificar signaturePadContainer para equipoId
+            guardarBtn.addEventListener('click', function () {
+                if (!signaturePad || signaturePad.isEmpty()) {
+                    alert("Por favor, provea una firma primero.");
+                } else {
+                    const dataURL = signaturePad.toDataURL('image/png');
+                    fetch('guardar_firma.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `equipo_id=${equipoId}&signature_data=${encodeURIComponent(dataURL)}`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // alert('Firma guardada exitosamente.');
+                            // Actualizar UI: mostrar imagen, ocultar canvas
+                            if(firmaExistenteDiv) {
+                                firmaExistenteDiv.querySelector('img').src = dataURL;
+                                firmaExistenteDiv.style.display = 'block';
+                            }
+                            if(canvasContainerDiv) canvasContainerDiv.style.display = 'none';
+                            if(signaturePad) signaturePad.off(); // Desactivar eventos del pad
+                            signaturePad = null; // Destruir instancia para que se reinicie si se borra
+
+                        } else {
+                            alert('Error al guardar firma: ' + (data.message || 'Error desconocido.'));
+                        }
+                    })
+                    .catch(error => console.error('Error en AJAX:', error));
+                }
+            });
+        }
+
+        if (borrarBtn && signaturePadContainer) {
+             borrarBtn.addEventListener('click', function () {
+                if (!confirm("¿Está seguro de que desea borrar la firma existente?")) return;
+                fetch('borrar_firma.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `equipo_id=${equipoId}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // alert('Firma borrada.');
+                         if(firmaExistenteDiv) {
+                            firmaExistenteDiv.querySelector('img').src = '';
+                            firmaExistenteDiv.style.display = 'none';
+                        }
+                        if(canvasContainerDiv) canvasContainerDiv.style.display = 'block';
+                        initializeSignaturePad(); // Re-inicializar el pad
+                        if(signaturePad) signaturePad.clear();
+                    } else {
+                        alert('Error al borrar firma: ' + (data.message || 'Error desconocido.'));
+                    }
+                })
+                .catch(error => console.error('Error en AJAX:', error));
+            });
+        }
+    });
+    </script>
 </body>
 </html>
