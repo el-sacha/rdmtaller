@@ -88,7 +88,7 @@ $global_search_action_path = $nav_base_path . "/global_search_results.php";
                     </li>
                     <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'admin'): ?>
                         <li class="nav-item dropdown <?php echo ($directorio_actual == 'admin') ? 'active' : ''; ?>">
-                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">Administración</a>
+                             <a class="nav-link dropdown-toggle" href="<?php echo $nav_base_path; ?>/admin/crear_usuario.php" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">Administración</a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                                 <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/admin/crear_usuario.php">Gestionar Usuarios</a></li>
                                 <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/admin/datos_fiscales.php">Datos Fiscales</a></li>
