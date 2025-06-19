@@ -112,7 +112,7 @@ $global_search_action_path = $nav_base_path . "/global_search_results.php";
                             <i class="bi bi-person-circle"></i> <?php echo htmlspecialchars($_SESSION['nombre_usuario']); ?> (<?php echo htmlspecialchars($_SESSION['rol']); ?>)
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
-                            <li><a class="dropdown-item" href="#">Mi Perfil</a></li> <!-- Placeholder -->
+                            <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/dashboard.php">Mi Perfil (Ver Dashboard)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/logout.php">Cerrar Sesión</a></li>
                         </ul>
