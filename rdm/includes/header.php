@@ -58,14 +58,14 @@ $global_search_action_path = $nav_base_path . "/global_search_results.php";
                         <a class="nav-link <?php echo ($pagina_actual == 'dashboard.php') ? 'active' : ''; ?>" href="<?php echo $nav_base_path; ?>/dashboard.php">Dashboard</a>
                     </li>
                     <li class="nav-item dropdown <?php echo ($directorio_actual == 'equipos') ? 'active' : ''; ?>">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownEquipos" role="button" data-bs-toggle="dropdown" aria-expanded="false">Equipos</a>
+                        <a class="nav-link dropdown-toggle" href="<?php echo $nav_base_path; ?>/equipos/ingresar.php" id="navbarDropdownEquipos" role="button" data-bs-toggle="dropdown" aria-expanded="false">Equipos</a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownEquipos">
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/equipos/ingresar.php">Ingresar Equipo</a></li>
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/equipos/listar_equipos.php">Listar Equipos</a></li>
                         </ul>
                     </li>
                      <li class="nav-item dropdown <?php echo ($directorio_actual == 'facturas') ? 'active' : ''; ?>">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFacturas" role="button" data-bs-toggle="dropdown" aria-expanded="false">Facturación</a>
+                        <a class="nav-link dropdown-toggle" href="<?php echo $nav_base_path; ?>/facturas/generar_factura.php" id="navbarDropdownFacturas" role="button" data-bs-toggle="dropdown" aria-expanded="false">Facturación</a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownFacturas">
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/facturas/generar_factura.php">Nueva Factura</a></li>
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/facturas/listar_facturas.php">Listar Facturas</a></li>
@@ -78,7 +78,7 @@ $global_search_action_path = $nav_base_path . "/global_search_results.php";
                         <a class="nav-link <?php echo ($directorio_actual == 'tecnicos') ? 'active' : ''; ?>" href="<?php echo $nav_base_path; ?>/tecnicos/listar.php">Técnicos</a>
                     </li>
                     <li class="nav-item dropdown <?php echo ($directorio_actual == 'reportes') ? 'active' : ''; ?>">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownReportes" role="button" data-bs-toggle="dropdown" aria-expanded="false">Reportes</a>
+                        <a class="nav-link dropdown-toggle" href="<?php echo $nav_base_path; ?>/reportes/equipos_por_fecha.php" id="navbarDropdownReportes" role="button" data-bs-toggle="dropdown" aria-expanded="false">Reportes</a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownReportes">
                             <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/reportes/equipos_por_fecha.php">Equipos por Fecha</a></li>
                             <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'admin'): ?>
@@ -88,7 +88,7 @@ $global_search_action_path = $nav_base_path . "/global_search_results.php";
                     </li>
                     <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'admin'): ?>
                         <li class="nav-item dropdown <?php echo ($directorio_actual == 'admin') ? 'active' : ''; ?>">
-                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">Administración</a>
+                             <a class="nav-link dropdown-toggle" href="<?php echo $nav_base_path; ?>/admin/crear_usuario.php" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">Administración</a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                                 <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/admin/crear_usuario.php">Gestionar Usuarios</a></li>
                                 <li><a class="dropdown-item" href="<?php echo $nav_base_path; ?>/admin/datos_fiscales.php">Datos Fiscales</a></li>
