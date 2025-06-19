@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (toggle.closest('ul.navbar-nav:not(.me-auto)')) {
              // This targets dropdowns in the right-aligned section of navbar
              // Check if it's the user dropdown by ID if a more specific selector is needed
-             if (toggle.id === 'navbarUserDropdown') return;
+             // if (toggle.id === 'navbarUserDropdown') return; // No longer skipping based on ID
         }
 
 
