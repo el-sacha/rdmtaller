@@ -62,7 +62,9 @@ if($stmt_clientes_all){
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cliente_id_form = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : null;
-    $equipo_id_form = isset($_POST['equipo_id_hidden']) ? (int)$_POST['equipo_id_hidden'] : null; // ID del equipo original si vino por GET
+    // $equipo_id_form = isset($_POST['equipo_id_hidden']) ? (int)$_POST['equipo_id_hidden'] : null; // Original line
+    $equipo_id_post_val = isset($_POST['equipo_id_hidden']) ? trim($_POST['equipo_id_hidden']) : '';
+    $equipo_id_form = (!empty($equipo_id_post_val) && (int)$equipo_id_post_val > 0) ? (int)$equipo_id_post_val : null;
 
     $metodo_pago = sanitizar_entrada($_POST['metodo_pago']);
     $condicion_venta = sanitizar_entrada($_POST['condicion_venta']);
