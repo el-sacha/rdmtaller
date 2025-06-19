@@ -19,9 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (toggle.getAttribute('href') === '#') {
                 event.preventDefault();
             }
-            // Stop propagation to prevent the document click listener from immediately closing it
-            // if it was meant to open.
-            event.stopPropagation();
+            // event.stopPropagation(); // Moved to the end of this event listener
 
             var parentLi = toggle.closest('.nav-item.dropdown');
             if (!parentLi) return;
@@ -44,8 +42,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Toggle current dropdown
+            console.log('Toggling menu for:', toggle.id || toggle.textContent.trim()); // Debugging line
             var isShown = an_Menu.classList.toggle('show');
             toggle.setAttribute('aria-expanded', isShown.toString());
+
+            // Stop propagation to prevent the document click listener from immediately closing it
+            // if it was meant to open, and to prevent other handlers if necessary.
+            event.stopPropagation();
         });
     });
 
