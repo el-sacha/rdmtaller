@@ -92,31 +92,33 @@ if ($export_type === 'csv' && !isset($mensaje_error_consulta)) {
 
 if ($export_type === 'pdf' && !isset($mensaje_error_consulta)) {
     verificar_login();
+    error_reporting(0); // Suppress PHP errors from breaking PDF output
+    @ini_set('display_errors', 0); // Suppress PHP errors from breaking PDF output
     require_once '../includes/fpdf/fpdf.php';
 
     class PDF_Reporte_Equipos extends FPDF {
         function Header() {
-            $this->SetFont('Arial','B',12); $this->Cell(0,10,iconv('UTF-8', 'windows-1252','Reporte de Equipos'),0,1,'C'); $this->Ln(5);
+            $this->SetFont('Arial','B',12); $this->Cell(0,10,iconv('UTF-8', 'windows-1252//TRANSLIT','Reporte de Equipos'),0,1,'C'); $this->Ln(5);
         }
         function Footer() {
-            $this->SetY(-15); $this->SetFont('Arial','I',8); $this->Cell(0,10,iconv('UTF-8', 'windows-1252','Página ').$this->PageNo().'/{nb}',0,0,'C');
+            $this->SetY(-15); $this->SetFont('Arial','I',8); $this->Cell(0,10,iconv('UTF-8', 'windows-1252//TRANSLIT','Página ').$this->PageNo().'/{nb}',0,0,'C');
         }
         function TableEquipos($header, $data) {
             $this->SetFillColor(200,220,255); $this->SetTextColor(0); $this->SetDrawColor(128,0,0);
             $this->SetLineWidth(.3); $this->SetFont('','B', 8);
             $w = array(15, 45, 30, 25, 25, 35, 25, 25); // Ajustar anchos para Landscape A4 (total ~190-277)
-            for($i=0;$i<count($header);$i++) $this->Cell($w[$i],7,iconv('UTF-8', 'windows-1252',$header[$i]),1,0,'C',true);
+            for($i=0;$i<count($header);$i++) $this->Cell($w[$i],7,iconv('UTF-8', 'windows-1252//TRANSLIT',$header[$i]),1,0,'C',true);
             $this->Ln();
             $this->SetFont('','',7); $fill = false;
             foreach($data as $row) {
-                $this->Cell($w[0],6,$row['equipo_id'],'LR',0,'C',$fill);
-                $this->Cell($w[1],6,iconv('UTF-8', 'windows-1252',substr($row['cliente_nombre'],0,28)),'LR',0,'L',$fill);
-                $this->Cell($w[2],6,iconv('UTF-8', 'windows-1252',substr($row['tipo_equipo'],0,18)),'LR',0,'L',$fill);
-                $this->Cell($w[3],6,iconv('UTF-8', 'windows-1252',substr($row['marca'],0,15)),'LR',0,'L',$fill);
-                $this->Cell($w[4],6,iconv('UTF-8', 'windows-1252',substr($row['modelo'],0,15)),'LR',0,'L',$fill);
-                $this->Cell($w[5],6,iconv('UTF-8', 'windows-1252',substr($row['tecnico_nombre'] ?? 'N/A',0,20)),'LR',0,'L',$fill);
-                $this->Cell($w[6],6,date("d/m/y H:i", strtotime($row['fecha_ingreso'])),'LR',0,'C',$fill);
-                $this->Cell($w[7],6,iconv('UTF-8', 'windows-1252',$row['estado_reparacion'] ?? 'N/A'),'LR',0,'L',$fill);
+                $this->Cell($w[0],6,$row['equipo_id'],'LR',0,'C',$fill); // ID is numeric, no iconv needed
+                $this->Cell($w[1],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($row['cliente_nombre'],0,28)),'LR',0,'L',$fill);
+                $this->Cell($w[2],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($row['tipo_equipo'],0,18)),'LR',0,'L',$fill);
+                $this->Cell($w[3],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($row['marca'],0,15)),'LR',0,'L',$fill);
+                $this->Cell($w[4],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($row['modelo'],0,15)),'LR',0,'L',$fill);
+                $this->Cell($w[5],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($row['tecnico_nombre'] ?? 'N/A',0,20)),'LR',0,'L',$fill);
+                $this->Cell($w[6],6,date("d/m/y H:i", strtotime($row['fecha_ingreso'])),'LR',0,'C',$fill); // Date is ASCII
+                $this->Cell($w[7],6,iconv('UTF-8', 'windows-1252//TRANSLIT',$row['estado_reparacion'] ?? 'N/A'),'LR',0,'L',$fill);
                 $this->Ln(); $fill = !$fill;
             }
             $this->Cell(array_sum($w),0,'','T');
@@ -128,8 +130,7 @@ if ($export_type === 'pdf' && !isset($mensaje_error_consulta)) {
     $header_pdf = array('ID', 'Cliente', 'Tipo', 'Marca', 'Modelo', 'Tecnico', 'F. Ingreso', 'Estado');
     $pdf->TableEquipos($header_pdf, $equipos_reporte);
     $pdf->Output('D', 'reporte_equipos_' . date('Ymd') . '.pdf');
-    // exit; // Comentado para la herramienta
-    return;
+    exit; // Ensure clean exit after PDF output
 }
 
 

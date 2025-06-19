@@ -123,36 +123,37 @@ if ($execute_query_rec && !isset($mensaje_error_consulta_rec)) {
     }
 
     if ($export_type_rec === 'pdf') {
+        error_reporting(0); // Suppress PHP errors
+        @ini_set('display_errors', 0); // Suppress PHP errors
         require_once '../includes/fpdf/fpdf.php';
         class PDF_Reporte_Recaudacion extends FPDF {
-            function Header() { $this->SetFont('Arial','B',12); $this->Cell(0,10,iconv('UTF-8', 'windows-1252','Reporte de Recaudación'),0,1,'C'); $this->Ln(5); }
-            function Footer() { $this->SetY(-15); $this->SetFont('Arial','I',8); $this->Cell(0,10,iconv('UTF-8', 'windows-1252','Página ').$this->PageNo().'/{nb}',0,0,'C');}
+            function Header() { $this->SetFont('Arial','B',12); $this->Cell(0,10,iconv('UTF-8', 'windows-1252//TRANSLIT','Reporte de Recaudación'),0,1,'C'); $this->Ln(5); }
+            function Footer() { $this->SetY(-15); $this->SetFont('Arial','I',8); $this->Cell(0,10,iconv('UTF-8', 'windows-1252//TRANSLIT','Página ').$this->PageNo().'/{nb}',0,0,'C');}
         }
         $pdf_rec = new PDF_Reporte_Recaudacion('P','mm','A4');
         $pdf_rec->AliasNbPages(); $pdf_rec->AddPage(); $pdf_rec->SetFont('Arial','',10);
-        $pdf_rec->SetFont('','B'); $pdf_rec->Cell(60,7,'Concepto',1); $pdf_rec->Cell(40,7,'Monto',1,1,'R'); $pdf_rec->SetFont('');
-        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252','Total Recaudado:'),'LR'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_recaudado'],2,',','.'),'R',1,'R');
-        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252','Total IVA:'),'LR'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_iva'],2,',','.'),'R',1,'R');
-        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252','Total Subtotal (Neto):'),'LRB'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_subtotal'],2,',','.'),'RB',1,'R');
-        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252','Cantidad de Facturas:'),'LRB'); $pdf_rec->Cell(40,7,$summary['cantidad_facturas'],'RB',1,'R');
+        $pdf_rec->SetFont('','B'); $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Concepto'),1); $pdf_rec->Cell(40,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Monto'),1,1,'R'); $pdf_rec->SetFont('');
+        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Total Recaudado:'),'LR'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_recaudado'],2,',','.'),'R',1,'R');
+        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Total IVA:'),'LR'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_iva'],2,',','.'),'R',1,'R');
+        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Total Subtotal (Neto):'),'LRB'); $pdf_rec->Cell(40,7,'$'.number_format($summary['total_subtotal'],2,',','.'),'RB',1,'R');
+        $pdf_rec->Cell(60,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Cantidad de Facturas:'),'LRB'); $pdf_rec->Cell(40,7,$summary['cantidad_facturas'],'RB',1,'R');
         if(!empty($facturas_periodo)){
-            $pdf_rec->Ln(10); $pdf_rec->SetFont('','B'); $pdf_rec->Cell(0,7,iconv('UTF-8', 'windows-1252','Detalle de Facturas del Período'),0,1);
+            $pdf_rec->Ln(10); $pdf_rec->SetFont('','B'); $pdf_rec->Cell(0,7,iconv('UTF-8', 'windows-1252//TRANSLIT','Detalle de Facturas del Período'),0,1);
             $w_fac = array(40,30,80,30); $pdf_rec->SetFont('','B',9);
-            $pdf_rec->Cell($w_fac[0],7,'Nro Factura',1); $pdf_rec->Cell($w_fac[1],7,'Fecha',1); $pdf_rec->Cell($w_fac[2],7,'Cliente',1); $pdf_rec->Cell($w_fac[3],7,'Total',1,1,'R');
+            $pdf_rec->Cell($w_fac[0],7,iconv('UTF-8', 'windows-1252//TRANSLIT','Nro Factura'),1); $pdf_rec->Cell($w_fac[1],7,iconv('UTF-8', 'windows-1252//TRANSLIT','Fecha'),1); $pdf_rec->Cell($w_fac[2],7,iconv('UTF-8', 'windows-1252//TRANSLIT','Cliente'),1); $pdf_rec->Cell($w_fac[3],7,iconv('UTF-8', 'windows-1252//TRANSLIT','Total'),1,1,'R');
             $pdf_rec->SetFont('','',8); $fill_fac = false;
             foreach($facturas_periodo as $fact){
                 $pdf_rec->SetFillColor(240,240,240);
-                $pdf_rec->Cell($w_fac[0],6,iconv('UTF-8', 'windows-1252',$fact['numero_factura']),'LR',0,'L',$fill_fac);
-                $pdf_rec->Cell($w_fac[1],6,date("d/m/Y", strtotime($fact['fecha_emision'])),'LR',0,'C',$fill_fac);
-                $pdf_rec->Cell($w_fac[2],6,iconv('UTF-8', 'windows-1252',substr($fact['cliente_nombre_factura'],0,45)),'LR',0,'L',$fill_fac);
-                $pdf_rec->Cell($w_fac[3],6,'$'.number_format($fact['total'],2,',','.'),'LR',1,'R',$fill_fac);
+                $pdf_rec->Cell($w_fac[0],6,iconv('UTF-8', 'windows-1252//TRANSLIT',$fact['numero_factura']),'LR',0,'L',$fill_fac);
+                $pdf_rec->Cell($w_fac[1],6,date("d/m/Y", strtotime($fact['fecha_emision'])),'LR',0,'C',$fill_fac); // Date is ASCII
+                $pdf_rec->Cell($w_fac[2],6,iconv('UTF-8', 'windows-1252//TRANSLIT',substr($fact['cliente_nombre_factura'],0,45)),'LR',0,'L',$fill_fac);
+                $pdf_rec->Cell($w_fac[3],6,'$'.number_format($fact['total'],2,',','.'),'LR',1,'R',$fill_fac); // Number is ASCII
                 $fill_fac = !$fill_fac;
             }
              $pdf_rec->Cell(array_sum($w_fac),0,'','T');
         }
         $pdf_rec->Output('D', 'reporte_recaudacion_' . date('Ymd') . '.pdf');
-        // exit; // Comentado para la herramienta
-        return;
+        exit; // Ensure clean exit
     }
 }
 
