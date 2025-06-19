@@ -45,7 +45,7 @@ $assets_path_prefix = '../assets';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ficha de Ingreso Equipo N° <?php echo htmlspecialchars($equipo['equipo_id']); ?></title>
+    <title>Ficha de Ingreso Equipo N° <?php echo htmlspecialchars($equipo['id']); ?></title>
     <!-- Incluir Bootstrap CSS si se desea un estilo más allá del básico para impresión -->
     <link href="<?php echo $assets_path_prefix; ?>/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -85,7 +85,7 @@ $assets_path_prefix = '../assets';
         <h2>Comprobante de Recepción de Equipo</h2>
 
         <div class="header-info">
-            <div><strong>Nº Orden:</strong> <?php echo htmlspecialchars($equipo['equipo_id']); ?></div>
+            <div><strong>Nº Orden:</strong> <?php echo htmlspecialchars($equipo['id']); ?></div>
             <div><strong>Fecha Recepción:</strong> <?php echo $fecha_ingreso_formateada; ?></div>
         </div>
 
@@ -116,7 +116,7 @@ $assets_path_prefix = '../assets';
              <p><strong>Estado Inicial:</strong> <?php echo htmlspecialchars($equipo['estado_actual'] ?? 'Indefinido'); ?></p>
         </div>
 
-        <div id="signature-pad-container" data-equipo-id="<?php echo $equipo['equipo_id']; ?>">
+        <div id="signature-pad-container" data-equipo-id="<?php echo $equipo['id']; ?>">
             <h3>Firma del Cliente:</h3>
             <?php if (!empty($equipo['firma_cliente_base64'])): ?>
                 <div id="firma-existente">
