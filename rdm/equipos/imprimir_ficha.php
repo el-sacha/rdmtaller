@@ -3,18 +3,43 @@
 require_once '../includes/funciones.php';
 require_once '../includes/db.php'; // $enlace
 
-// verificar_login(); // Descomentado para que el cliente pueda verla si tiene el link.
-                     // Considerar un token de acceso único si se quiere seguridad sin login.
+verificar_login(); // Habilitar la verificación de login
 
 $equipo_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($equipo_id <= 0) {
-    die("Error: ID de equipo no válido.");
+    $_SESSION['error_accion_equipo'] = "ID de equipo no válido.";
+    header("Location: listar_equipos.php");
+    return;
 }
 
-// Fetch equipo data, including firma_cliente_base64
+// --- Lógica de autorización ---
+$usuario_rol = $_SESSION['rol'] ?? 'desconocido';
+$usuario_actual_tecnico_id = null;
+$equipo = null; // Inicializar $equipo
+
+if ($usuario_rol === 'tecnico') {
+    $stmt_user_tecnico = mysqli_prepare($enlace, "SELECT tecnico_id FROM usuarios WHERE id = ?");
+    if ($stmt_user_tecnico) {
+        mysqli_stmt_bind_param($stmt_user_tecnico, "i", $_SESSION['usuario_id']);
+        mysqli_stmt_execute($stmt_user_tecnico);
+        $res_user_tecnico = mysqli_stmt_get_result($stmt_user_tecnico);
+        if ($row_user_tecnico = mysqli_fetch_assoc($res_user_tecnico)) {
+            $usuario_actual_tecnico_id = $row_user_tecnico['tecnico_id'];
+        }
+        mysqli_stmt_close($stmt_user_tecnico);
+    }
+
+    if (!$usuario_actual_tecnico_id) {
+        $_SESSION['error_accion_equipo'] = "Error: No se pudo determinar el ID de técnico para el usuario actual o el usuario no está vinculado a un técnico.";
+        header("Location: listar_equipos.php");
+        return;
+    }
+}
+
+// Fetch equipo data
 $sql = "SELECT
-            e.*,
+            e.*,  -- e.tecnico_asignado_id se incluye aquí
             c.nombre AS cliente_nombre, c.dni AS cliente_dni, c.telefono AS cliente_telefono, c.email AS cliente_email,
             t.nombre AS tecnico_nombre,
             er.nombre_estado AS estado_actual
@@ -25,14 +50,33 @@ $sql = "SELECT
         WHERE e.id = ?";
 
 $stmt = mysqli_prepare($enlace, $sql);
-if (!$stmt) die("Error al preparar la consulta: " . mysqli_error($enlace));
+if (!$stmt) {
+    error_log("Error al preparar la consulta para imprimir ficha: " . mysqli_error($enlace));
+    $_SESSION['error_accion_equipo'] = "Error al cargar datos del equipo. Intente más tarde.";
+    header("Location: listar_equipos.php");
+    return;
+}
 mysqli_stmt_bind_param($stmt, "i", $equipo_id);
 mysqli_stmt_execute($stmt);
 $resultado = mysqli_stmt_get_result($stmt);
 $equipo = mysqli_fetch_assoc($resultado);
 mysqli_stmt_close($stmt);
 
-if (!$equipo) die("Ficha de equipo no encontrada. ID: " . htmlspecialchars($equipo_id));
+if (!$equipo) {
+    $_SESSION['error_accion_equipo'] = "Ficha de equipo no encontrada. ID: " . htmlspecialchars($equipo_id);
+    header("Location: listar_equipos.php");
+    return;
+}
+
+// Aplicar autorización si es técnico
+if ($usuario_rol === 'tecnico') {
+    if ($equipo['tecnico_asignado_id'] != $usuario_actual_tecnico_id) {
+        $_SESSION['error_accion_equipo'] = "Acceso denegado: No está asignado a este equipo.";
+        header("Location: listar_equipos.php");
+        return;
+    }
+}
+// --- Fin lógica de autorización ---
 
 $fecha_ingreso_formateada = date("d/m/Y H:i:s", strtotime($equipo['fecha_ingreso']));
 
@@ -118,9 +162,9 @@ $assets_path_prefix = '../assets';
 
         <div id="signature-pad-container" data-equipo-id="<?php echo $equipo['id']; ?>">
             <h3>Firma del Cliente:</h3>
-            <?php if (!empty($equipo['firma_cliente_base64'])): ?>
+            <?php if (!empty($equipo['firma_cliente_ruta'])): ?>
                 <div id="firma-existente">
-                    <img src="<?php echo htmlspecialchars($equipo['firma_cliente_base64']); ?>" alt="Firma del Cliente" class="signature-image">
+                    <img src="../<?php echo htmlspecialchars($equipo['firma_cliente_ruta']); ?>?t=<?php echo time(); ?>" alt="Firma del Cliente" class="signature-image">
                     <div class="firma-actions no-print">
                         <button id="borrar-firma-btn" class="btn btn-sm btn-danger">Borrar Firma y Volver a Firmar</button>
                     </div>
@@ -209,7 +253,7 @@ $assets_path_prefix = '../assets';
                             // alert('Firma guardada exitosamente.');
                             // Actualizar UI: mostrar imagen, ocultar canvas
                             if(firmaExistenteDiv) {
-                                firmaExistenteDiv.querySelector('img').src = dataURL;
+                                firmaExistenteDiv.querySelector('img').src = '../' + data.filePath + '?t=' + new Date().getTime();
                                 firmaExistenteDiv.style.display = 'block';
                             }
                             if(canvasContainerDiv) canvasContainerDiv.style.display = 'none';

@@ -31,12 +31,67 @@ if ($stmt_estados) {
 // Variables para el formulario
 $estado_reparacion_id_actual = '';
 $notas_internas_reparacion_actual = '';
+$equipo_actual = null; // Inicializar $equipo_actual para evitar errores si no se carga
+
+// --- Lógica de autorización común ---
+$usuario_rol = $_SESSION['rol'] ?? 'desconocido';
+$usuario_actual_tecnico_id = null;
+
+if ($usuario_rol === 'tecnico') {
+    $stmt_user_tecnico = mysqli_prepare($enlace, "SELECT tecnico_id FROM usuarios WHERE id = ?");
+    if ($stmt_user_tecnico) {
+        mysqli_stmt_bind_param($stmt_user_tecnico, "i", $_SESSION['usuario_id']);
+        mysqli_stmt_execute($stmt_user_tecnico);
+        $res_user_tecnico = mysqli_stmt_get_result($stmt_user_tecnico);
+        if ($row_user_tecnico = mysqli_fetch_assoc($res_user_tecnico)) {
+            $usuario_actual_tecnico_id = $row_user_tecnico['tecnico_id'];
+        }
+        mysqli_stmt_close($stmt_user_tecnico);
+    }
+
+    if (!$usuario_actual_tecnico_id) {
+        $_SESSION['error_accion_equipo'] = "Error: No se pudo determinar el ID de técnico para el usuario actual o el usuario no está vinculado a un técnico.";
+        header("Location: listar_equipos.php");
+        return;
+    }
+}
+// --- Fin lógica de autorización común ---
+
 
 // --- Lógica de POST (Actualización de estado y notas) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST['csrf_token']) || !validar_token_csrf($_POST['csrf_token'])) {
         $mensaje = "<div class='alert alert-danger'>Error de validación CSRF. Inténtelo de nuevo.</div>";
     } else {
+        // --- Comprobación de autorización para POST ---
+        if ($usuario_rol === 'tecnico') {
+            $stmt_check_equipo_post = mysqli_prepare($enlace, "SELECT tecnico_asignado_id FROM equipos WHERE id = ?");
+            if ($stmt_check_equipo_post) {
+                mysqli_stmt_bind_param($stmt_check_equipo_post, "i", $equipo_id);
+                mysqli_stmt_execute($stmt_check_equipo_post);
+                $res_check_equipo_post = mysqli_stmt_get_result($stmt_check_equipo_post);
+                $equipo_a_editar_post = mysqli_fetch_assoc($res_check_equipo_post);
+                mysqli_stmt_close($stmt_check_equipo_post);
+
+                if (!$equipo_a_editar_post) {
+                    $_SESSION['error_accion_equipo'] = "Error: El equipo que intenta modificar no existe.";
+                    header("Location: listar_equipos.php");
+                    return;
+                }
+                if ($equipo_a_editar_post['tecnico_asignado_id'] != $usuario_actual_tecnico_id) {
+                    $_SESSION['error_accion_equipo'] = "Acceso denegado (POST): No está asignado a este equipo.";
+                    header("Location: listar_equipos.php");
+                    return;
+                }
+            } else {
+                // Error al preparar la consulta, mejor no continuar
+                $_SESSION['error_accion_equipo'] = "Error al verificar la asignación del equipo.";
+                header("Location: listar_equipos.php");
+                return;
+            }
+        }
+        // --- Fin comprobación de autorización para POST ---
+
         $equipo_id_post = isset($_POST['equipo_id']) ? (int)$_POST['equipo_id'] : 0;
         if ($equipo_id_post !== $equipo_id) {
             $_SESSION['error_accion_equipo'] = "Error: ID de equipo incorrecto en el formulario.";
@@ -131,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || strpos($mensaje, "Error de validaci
             $sql_select_equipo = "SELECT
                             e.id AS equipo_id, e.tipo_equipo, e.marca, e.modelo, e.numero_serie_imei,
                             e.fallas_reportadas, e.estado_fisico, e.observaciones, e.accesorios_entregados,
-                            e.fecha_ingreso, e.estado_reparacion_id, e.notas_internas_reparacion,
+                            e.fecha_ingreso, e.estado_reparacion_id, e.notas_internas_reparacion, e.tecnico_asignado_id,
                             c.nombre AS cliente_nombre, c.dni AS cliente_dni,
                             t.nombre AS tecnico_nombre,
                             er.nombre_estado AS estado_actual_nombre
@@ -140,25 +195,51 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || strpos($mensaje, "Error de validaci
                         LEFT JOIN tecnicos t ON e.tecnico_asignado_id = t.id
                         LEFT JOIN estados_reparacion er ON e.estado_reparacion_id = er.id
                         WHERE e.id = ?";
-    $stmt_select = mysqli_prepare($enlace, $sql_select_equipo);
-    if (!$stmt_select) {
-        $_SESSION['error_accion_equipo'] = "Error al preparar consulta de equipo: " . mysqli_error($enlace);
-        header("Location: listar_equipos.php");
-        return;
-    }
-    mysqli_stmt_bind_param($stmt_select, "i", $equipo_id);
-    mysqli_stmt_execute($stmt_select);
-    $res_select = mysqli_stmt_get_result($stmt_select);
-    $equipo_actual = mysqli_fetch_assoc($res_select);
-    mysqli_stmt_close($stmt_select);
+            $stmt_select = mysqli_prepare($enlace, $sql_select_equipo);
+            if (!$stmt_select) {
+                // Loguear error y mostrar mensaje genérico si $mensaje está vacío.
+                // Si $mensaje ya tiene un error (CSRF o DB de POST), este error de carga no se muestra directamente.
+                $error_get_msg = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace), "", "Error al cargar la información del equipo.");
+                if (empty($mensaje)) {
+                    $mensaje = $error_get_msg;
+                } else {
+                     error_log("Error DB GET (no mostrado directamente al user por mensaje existente): " . mysqli_error($enlace));
+                }
+                // No se puede continuar si no se carga el equipo, así que limpiamos $equipo_actual para que no se muestre el formulario de edición.
+                $equipo_actual = null;
+            } else {
+                mysqli_stmt_bind_param($stmt_select, "i", $equipo_id);
+                mysqli_stmt_execute($stmt_select);
+                $res_select = mysqli_stmt_get_result($stmt_select);
+                $equipo_actual = mysqli_fetch_assoc($res_select); // Asignar a la variable global del script
+                mysqli_stmt_close($stmt_select);
 
-    if (!$equipo_actual) {
-        $_SESSION['error_accion_equipo'] = "Equipo no encontrado.";
-        header("Location: listar_equipos.php");
-        return;
-    }
-    $estado_reparacion_id_actual = $equipo_actual['estado_reparacion_id'];
-    $notas_internas_reparacion_actual = $equipo_actual['notas_internas_reparacion'];
+                if (!$equipo_actual) {
+                    // No es un error de DB, sino que el equipo no existe.
+                    // Si $mensaje está vacío, mostrarlo. Si no, el error anterior (CSRF, DB) tiene precedencia.
+                    if (empty($mensaje)) {
+                         $mensaje = "<div class='alert alert-warning'>Equipo no encontrado. Puede haber sido eliminado.</div>";
+                    }
+                } else {
+                    // --- Comprobación de autorización para GET ---
+                    if ($usuario_rol === 'tecnico') {
+                        if ($equipo_actual['tecnico_asignado_id'] != $usuario_actual_tecnico_id) {
+                            $_SESSION['error_accion_equipo'] = "Acceso denegado (GET): No está asignado a este equipo.";
+                            header("Location: listar_equipos.php");
+                            return;
+                        }
+                    }
+                    // --- Fin comprobación de autorización para GET ---
+
+                    // Solo rellenar estos si no venimos de un POST fallido (excepto error CSRF donde sí queremos recargar)
+                    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || strpos($mensaje, "Error de validación CSRF") !== false) {
+                        $estado_reparacion_id_actual = $equipo_actual['estado_reparacion_id'];
+                        $notas_internas_reparacion_actual = $equipo_actual['notas_internas_reparacion'];
+                    }
+                }
+            }
+        } // Cierre if ($equipo_id > 0)
+    } // Cierre if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !empty($mensaje))
 }
 
 

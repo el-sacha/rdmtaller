@@ -23,6 +23,39 @@ if (isset($_SESSION['mensaje_error_layout'])) {
     unset($_SESSION['mensaje_error_layout']);
 }
 
+// --- Lógica de autorización ---
+$usuario_rol = $_SESSION['rol'] ?? 'desconocido';
+$usuario_id_actual = $_SESSION['usuario_id'] ?? null;
+$usuario_actual_tecnico_id = null;
+$condicion_tecnico_sql = "";
+$param_tecnico_id = null;
+
+if ($usuario_rol === 'tecnico' && $usuario_id_actual) {
+    $stmt_user_tecnico = mysqli_prepare($enlace, "SELECT tecnico_id FROM usuarios WHERE id = ?");
+    if ($stmt_user_tecnico) {
+        mysqli_stmt_bind_param($stmt_user_tecnico, "i", $usuario_id_actual);
+        mysqli_stmt_execute($stmt_user_tecnico);
+        $res_user_tecnico = mysqli_stmt_get_result($stmt_user_tecnico);
+        if ($row_user_tecnico = mysqli_fetch_assoc($res_user_tecnico)) {
+            $usuario_actual_tecnico_id = $row_user_tecnico['tecnico_id'];
+        }
+        mysqli_stmt_close($stmt_user_tecnico);
+    }
+
+    if ($usuario_actual_tecnico_id) {
+        $condicion_tecnico_sql = "e.tecnico_asignado_id = ?";
+        $param_tecnico_id = $usuario_actual_tecnico_id;
+    } else {
+        // Técnico no tiene un tecnico_id vinculado en la tabla usuarios, o no se encontró el usuario.
+        // No debería ver ningún equipo. Podemos forzar una condición que no devuelva nada.
+        $condicion_tecnico_sql = "e.tecnico_asignado_id = ?"; // Se usará un ID inválido como -1
+        $param_tecnico_id = -1; // ID imposible para asegurar que no vea nada
+        if (empty($mensaje_accion)) { // Solo mostrar si no hay otro mensaje de error/éxito prioritario
+            $mensaje_accion = "<div class='alert alert-warning alert-dismissible fade show' role='alert'>No se pudo determinar su asignación como técnico o no está vinculado a un registro de técnico. No se mostrarán equipos. Contacte al administrador.<button type='button' class='btn-close' data-bs-dismiss='alert' aria-label='Close'></button></div>";
+        }
+    }
+}
+// --- Fin lógica de autorización ---
 
 $sql = "SELECT
             e.id AS equipo_id,
@@ -39,24 +72,38 @@ $sql = "SELECT
 
 $params = [];
 $types = "";
+$where_clauses = [];
 
 if (!empty($termino_busqueda)) {
-    $sql .= " WHERE (e.id = ? OR c.nombre LIKE ? OR e.numero_serie_imei LIKE ? OR e.marca LIKE ? OR e.modelo LIKE ?)";
+    $where_clauses[] = "(e.id = ? OR c.nombre LIKE ? OR e.numero_serie_imei LIKE ? OR e.marca LIKE ? OR e.modelo LIKE ?)";
     $like_termino = "%" . $termino_busqueda . "%";
     if (is_numeric($termino_busqueda)) {
         $params[] = (int)$termino_busqueda; $types .= "i";
     } else {
-        $params[] = -1; $types .= "i"; // ID imposible
+        $params[] = -1; $types .= "i"; // ID imposible para el e.id = ?
     }
     $params[] = $like_termino; $params[] = $like_termino; $params[] = $like_termino; $params[] = $like_termino;
     $types .= "ssss";
 }
+
+if (!empty($condicion_tecnico_sql)) {
+    $where_clauses[] = $condicion_tecnico_sql;
+    if ($param_tecnico_id !== null) { // Asegurarse de que $param_tecnico_id no sea null antes de añadirlo
+        $params[] = $param_tecnico_id;
+        $types .= "i";
+    }
+}
+
+if (!empty($where_clauses)) {
+    $sql .= " WHERE " . implode(" AND ", $where_clauses);
+}
+
 $sql .= " ORDER BY e.fecha_ingreso DESC";
 
 $stmt = mysqli_prepare($enlace, $sql);
 
 if ($stmt) {
-    if (!empty($params)) {
+    if (!empty($types) && count($params) > 0) { // Asegurar que $types y $params no estén vacíos
         mysqli_stmt_bind_param($stmt, $types, ...$params);
     }
     mysqli_stmt_execute($stmt);
