@@ -4,6 +4,9 @@ require_once '../includes/funciones.php';
 require_once '../includes/db.php';
 
 verificar_login();
+// La función verificar_login ya llama a iniciar_sesion_segura()
+// y generar_token_csrf() también la llama, así que la sesión está gestionada.
+$csrf_token = generar_token_csrf();
 
 $termino_busqueda = isset($_GET['q']) ? sanitizar_entrada($_GET['q']) : '';
 $mensaje_accion = '';
@@ -90,8 +93,11 @@ require_once '../includes/header.php';
                         <td><?php echo nl2br(htmlspecialchars($cliente['direccion'] ?? '-')); ?></td>
                         <td class="acciones-tabla">
                             <a href="editar.php?id=<?php echo $cliente['id']; ?>" class="btn btn-editar">Editar</a>
-                            <a href="eliminar.php?id=<?php echo $cliente['id']; ?>" class="btn btn-eliminar" onclick="return confirm('¿Está seguro de que desea eliminar este cliente? ESTA ACCIÓN ES IRREVERSIBLE.');">Eliminar</a>
-                            <!-- Se añade confirmación JS básica aquí, pero eliminar.php debe ser POST o tener token CSRF -->
+                            <form action="eliminar.php" method="POST" style="display:inline;" onsubmit="return confirm('¿Está seguro de que desea eliminar este cliente? ESTA ACCIÓN ES IRREVERSIBLE.');">
+                                <input type="hidden" name="cliente_id" value="<?php echo $cliente['id']; ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                <button type="submit" class="btn btn-eliminar">Eliminar</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
