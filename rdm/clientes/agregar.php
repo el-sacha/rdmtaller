@@ -4,7 +4,10 @@ require_once '../includes/funciones.php';
 require_once '../includes/db.php'; // Para $enlace
 
 verificar_login(); // Asegura que el usuario esté logueado
+// La función verificar_login ya llama a iniciar_sesion_segura()
+// y generar_token_csrf() también la llama, así que la sesión está gestionada.
 
+$csrf_token = generar_token_csrf();
 $mensaje = '';
 $error_validacion = [];
 $nombre = '';
@@ -14,9 +17,16 @@ $telefono = '';
 $direccion = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Sanitizar entradas
-    $nombre = isset($_POST['nombre']) ? sanitizar_entrada($_POST['nombre']) : '';
-    $dni = isset($_POST['dni']) ? sanitizar_entrada($_POST['dni']) : '';
+    // Validar CSRF token
+    if (!isset($_POST['csrf_token']) || !validar_token_csrf($_POST['csrf_token'])) {
+        $mensaje = "<p class='mensaje-error'>Error de validación CSRF. Inténtelo de nuevo.</p>";
+        // Opcional: invalidar el token actual para forzar uno nuevo en el próximo intento
+        // unset($_SESSION['csrf_token']);
+        // $csrf_token = generar_token_csrf(); // Generar uno nuevo para el formulario
+    } else {
+        // Sanitizar entradas
+        $nombre = isset($_POST['nombre']) ? sanitizar_entrada($_POST['nombre']) : '';
+        $dni = isset($_POST['dni']) ? sanitizar_entrada($_POST['dni']) : '';
     $email = isset($_POST['email']) ? sanitizar_entrada($_POST['email']) : '';
     $telefono = isset($_POST['telefono']) ? sanitizar_entrada($_POST['telefono']) : '';
     $direccion = isset($_POST['direccion']) ? sanitizar_entrada($_POST['direccion']) : '';
@@ -36,38 +46,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($error_validacion)) {
         // Verificar si el DNI o Email ya existen (si deben ser únicos)
         $stmt_check = mysqli_prepare($enlace, "SELECT id FROM clientes WHERE dni = ? OR (email = ? AND email != '')");
-        mysqli_stmt_bind_param($stmt_check, "ss", $dni, $email);
-        mysqli_stmt_execute($stmt_check);
-        $resultado_check = mysqli_stmt_get_result($stmt_check);
+            if ($stmt_check) {
+                mysqli_stmt_bind_param($stmt_check, "ss", $dni, $email);
+                mysqli_stmt_execute($stmt_check);
+                $resultado_check = mysqli_stmt_get_result($stmt_check);
 
-        if (mysqli_fetch_assoc($resultado_check)) {
-            $mensaje = "<p class='mensaje-error'>Ya existe un cliente con el mismo DNI o Email.</p>";
-            // Podríamos ser más específicos:
-            // $cliente_existente = mysqli_fetch_assoc($resultado_check);
-            // if ($cliente_existente['dni'] == $dni) $error_validacion['dni'] = "Este DNI ya está registrado.";
-            // if ($cliente_existente['email'] == $email) $error_validacion['email'] = "Este Email ya está registrado.";
-        } else {
-            mysqli_stmt_close($stmt_check);
-
-            $sql = "INSERT INTO clientes (nombre, dni, email, telefono, direccion) VALUES (?, ?, ?, ?, ?)";
-            $stmt = mysqli_prepare($enlace, $sql);
-
-            if (!$stmt) {
-                $mensaje = "<p class='mensaje-error'>Error al preparar la consulta: " . mysqli_error($enlace) . "</p>";
-            } else {
-                mysqli_stmt_bind_param($stmt, "sssss", $nombre, $dni, $email, $telefono, $direccion);
-                if (mysqli_stmt_execute($stmt)) {
-                    $mensaje = "<p class='mensaje-exito'>Cliente agregado exitosamente.</p>";
-                    // Limpiar campos después de éxito
-                    $nombre = $dni = $email = $telefono = $direccion = '';
+                if (mysqli_fetch_assoc($resultado_check)) {
+                    $mensaje = "<p class='mensaje-error'>Ya existe un cliente con el mismo DNI o Email.</p>";
                 } else {
-                    $mensaje = "<p class='mensaje-error'>Error al agregar el cliente: " . mysqli_stmt_error($stmt) . "</p>";
+                    // $stmt_check se cierra dentro del bloque if/else para asegurar que no haya problemas
+                    // si la siguiente preparación falla.
+                    mysqli_stmt_close($stmt_check);
+                    $stmt_check = null; // Marcar como cerrado
+
+                    $sql = "INSERT INTO clientes (nombre, dni, email, telefono, direccion) VALUES (?, ?, ?, ?, ?)";
+                    $stmt = mysqli_prepare($enlace, $sql);
+
+                    if (!$stmt) {
+                        $mensaje = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace));
+                } else {
+                        mysqli_stmt_bind_param($stmt, "sssss", $nombre, $dni, $email, $telefono, $direccion);
+                        if (mysqli_stmt_execute($stmt)) {
+                            $mensaje = "<p class='mensaje-exito'>Cliente agregado exitosamente.</p>";
+                            // Limpiar campos después de éxito
+                            $nombre = $dni = $email = $telefono = $direccion = '';
+                        } else {
+                            $mensaje = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace), mysqli_stmt_error($stmt));
+                        }
+                        mysqli_stmt_close($stmt);
                 }
-                mysqli_stmt_close($stmt);
             }
+                if (isset($stmt_check) && $stmt_check) mysqli_stmt_close($stmt_check);
+            } else { // Falló mysqli_prepare para $stmt_check
+                 $mensaje = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace), "", "Error al verificar datos existentes.");
         }
-        if (isset($stmt_check) && $stmt_check) mysqli_stmt_close($stmt_check);
-    } else {
+        } // Cierre del if (empty($error_validacion))
+    } // Cierre del else de la validación CSRF
+
+    if (empty($mensaje) && !empty($error_validacion)) { // Si no hay mensaje de CSRF o DB, pero sí de validación de campos
         $mensaje = "<p class='mensaje-error'>Por favor corrija los errores del formulario.</p>";
     }
 }
@@ -82,6 +98,7 @@ require_once '../includes/header.php';
     <?php if (!empty($mensaje)) echo $mensaje; ?>
 
     <form action="agregar.php" method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <div class="form-grupo">
             <label for="nombre">Nombre Completo:</label>
             <input type="text" name="nombre" id="nombre" value="<?php echo htmlspecialchars($nombre); ?>" required>

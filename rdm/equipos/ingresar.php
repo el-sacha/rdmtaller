@@ -5,6 +5,7 @@ require_once '../includes/db.php';
 
 verificar_login();
 
+$csrf_token = generar_token_csrf();
 $mensaje = '';
 $error_validacion = [];
 
@@ -65,9 +66,12 @@ if ($estado_ingresado_id === null) {
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $cliente_id = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : '';
-    $tipo_equipo = isset($_POST['tipo_equipo']) ? sanitizar_entrada($_POST['tipo_equipo']) : '';
-    $marca = isset($_POST['marca']) ? sanitizar_entrada($_POST['marca']) : '';
+    if (!isset($_POST['csrf_token']) || !validar_token_csrf($_POST['csrf_token'])) {
+        $mensaje = "<p class='mensaje-error'>Error de validación CSRF. Inténtelo de nuevo.</p>";
+    } else {
+        $cliente_id = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : '';
+        $tipo_equipo = isset($_POST['tipo_equipo']) ? sanitizar_entrada($_POST['tipo_equipo']) : '';
+        $marca = isset($_POST['marca']) ? sanitizar_entrada($_POST['marca']) : '';
     $modelo = isset($_POST['modelo']) ? sanitizar_entrada($_POST['modelo']) : '';
     $numero_serie_imei = isset($_POST['numero_serie_imei']) ? sanitizar_entrada($_POST['numero_serie_imei']) : '';
     $fallas_reportadas = isset($_POST['fallas_reportadas']) ? sanitizar_entrada($_POST['fallas_reportadas']) : '';
@@ -101,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = mysqli_prepare($enlace, $sql);
         if (!$stmt) {
-            $mensaje = "<p class='mensaje-error'>Error al preparar la consulta: " . mysqli_error($enlace) . "</p>";
+            $mensaje = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace));
         } else {
             mysqli_stmt_bind_param($stmt, "issssssssisi",
                 $cliente_id, $tipo_equipo, $marca, $modelo, $numero_serie_imei,
@@ -116,11 +120,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header("Location: imprimir_ficha.php?id=" . $nuevo_equipo_id);
                 return; // Usar return para la herramienta
             } else {
-                $mensaje = "<p class='mensaje-error'>Error al ingresar el equipo: " . mysqli_stmt_error($stmt) . "</p>";
+                $mensaje = log_db_error_y_mostrar_mensaje_generico(mysqli_error($enlace), mysqli_stmt_error($stmt));
             }
             if($stmt) mysqli_stmt_close($stmt);
         }
-    } else {
+    } // Cierre del else de validación CSRF
+    if (empty($mensaje) && !empty($error_validacion)) { // Si no hay mensaje de CSRF pero sí de validación
         $mensaje = "<p class='mensaje-error'>Por favor corrija los errores del formulario.</p>";
     }
 }
@@ -134,6 +139,7 @@ require_once '../includes/header.php';
     <?php if (!empty($mensaje)) echo $mensaje; ?>
 
     <form action="ingresar.php" method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <fieldset>
             <legend>Información del Cliente y Equipo</legend>
             <div class="form-grupo">

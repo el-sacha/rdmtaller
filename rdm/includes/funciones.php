@@ -70,4 +70,53 @@ if (!function_exists('sanitizar')) {
 // - function generar_token_csrf() { ... }
 // - function validar_token_csrf() { ... }
 
+/**
+ * Genera un token CSRF y lo guarda en la sesión.
+ * @return string El token generado.
+ */
+function generar_token_csrf() {
+    iniciar_sesion_segura(); // Asegura que la sesión esté activa
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Valida el token CSRF enviado contra el almacenado en la sesión.
+ * @param string $token_enviado El token recibido del formulario.
+ * @return bool True si el token es válido, False en caso contrario.
+ */
+function validar_token_csrf($token_enviado) {
+    iniciar_sesion_segura(); // Asegura que la sesión esté activa
+    if (!empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token_enviado)) {
+        // Token válido, se puede invalidar para un solo uso si se desea (opcional)
+        // unset($_SESSION['csrf_token']); // Descomentar para tokens de un solo uso
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Registra un error de base de datos y devuelve un mensaje genérico para el usuario.
+ * @param string $detalle_error El error detallado para registrar (e.g., mysqli_error).
+ * @param string $stmt_error El error de statement (opcional).
+ * @param string $mensaje_usuario Mensaje genérico para el usuario.
+ * @return string Mensaje genérico para el usuario.
+ */
+function log_db_error_y_mostrar_mensaje_generico($detalle_error, $stmt_error = "", $mensaje_usuario = "Ocurrió un error inesperado al procesar su solicitud. Por favor, inténtelo de nuevo más tarde o contacte al soporte técnico.") {
+    $log_mensaje = "Error DB: " . $detalle_error;
+    if (!empty($stmt_error)) {
+        $log_mensaje .= " | Stmt Error: " . $stmt_error;
+    }
+    error_log($log_mensaje); // Registra el error detallado en el log del servidor
+
+    // Considerar aquí si se quiere mostrar un ID de error único al usuario
+    // que pueda correlacionar con las entradas del log.
+    // Ejemplo: $error_id = uniqid('err_'); error_log($error_id . ": " . $log_mensaje);
+    // return $mensaje_usuario . " (Referencia del error: " . $error_id . ")";
+
+    return "<p class='mensaje-error'>" . htmlspecialchars($mensaje_usuario) . "</p>";
+}
+
 ?>

@@ -5,6 +5,7 @@ require_once '../includes/db.php';
 
 verificar_login();
 
+$csrf_token = generar_token_csrf();
 $mensaje = '';
 $error_validacion = [];
 $equipo_id = isset($_GET['equipo_id']) ? (int)$_GET['equipo_id'] : null;
@@ -61,9 +62,12 @@ if($stmt_clientes_all){
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $cliente_id_form = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : null;
-    // $equipo_id_form = isset($_POST['equipo_id_hidden']) ? (int)$_POST['equipo_id_hidden'] : null; // Original line
-    $equipo_id_post_val = isset($_POST['equipo_id_hidden']) ? trim($_POST['equipo_id_hidden']) : '';
+    if (!isset($_POST['csrf_token']) || !validar_token_csrf($_POST['csrf_token'])) {
+        $mensaje = "<div class='alert alert-danger'>Error de validación CSRF. Inténtelo de nuevo.</div>";
+    } else {
+        $cliente_id_form = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : null;
+        // $equipo_id_form = isset($_POST['equipo_id_hidden']) ? (int)$_POST['equipo_id_hidden'] : null; // Original line
+        $equipo_id_post_val = isset($_POST['equipo_id_hidden']) ? trim($_POST['equipo_id_hidden']) : '';
     $equipo_id_form = (!empty($equipo_id_post_val) && (int)$equipo_id_post_val > 0) ? (int)$equipo_id_post_val : null;
 
     $metodo_pago = sanitizar_entrada($_POST['metodo_pago']);
@@ -88,18 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // 1. Obtener datos fiscales de la empresa (asumimos ID=1 o el primero)
             $stmt_df = mysqli_prepare($enlace, "SELECT id, punto_venta FROM datos_fiscales_empresa ORDER BY id LIMIT 1");
+            if (!$stmt_df) { error_log("Error DB (prepare datos_fiscales): " . mysqli_error($enlace)); throw new Exception("No se pudieron cargar los datos fiscales."); }
             mysqli_stmt_execute($stmt_df);
             $res_df = mysqli_stmt_get_result($stmt_df);
             $datos_fiscales_actuales = mysqli_fetch_assoc($res_df);
             mysqli_stmt_close($stmt_df);
-            if (!$datos_fiscales_actuales) throw new Exception("Datos fiscales de la empresa no configurados.");
+            if (!$datos_fiscales_actuales) throw new Exception("Datos fiscales de la empresa no configurados o no encontrados.");
 
             $punto_venta_actual = $datos_fiscales_actuales['punto_venta'];
             $datos_fiscales_id_actual = $datos_fiscales_actuales['id'];
 
             // 2. Generar número de factura (simplificado, mejorar en producción)
-            // Formato: PUNTO_VENTA-NUMERO_SECUENCIAL (ej: 0001-00000001)
             $stmt_max_num = mysqli_prepare($enlace, "SELECT MAX(CAST(SUBSTRING_INDEX(numero_factura, '-', -1) AS UNSIGNED)) AS max_seq FROM facturas WHERE numero_factura LIKE ?");
+            if (!$stmt_max_num) { error_log("Error DB (prepare max_num factura): " . mysqli_error($enlace)); throw new Exception("No se pudo generar el número de factura."); }
             $prefijo_busqueda = $punto_venta_actual . "-%";
             mysqli_stmt_bind_param($stmt_max_num, "s", $prefijo_busqueda);
             mysqli_stmt_execute($stmt_max_num);
@@ -125,16 +130,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sql_factura = "INSERT INTO facturas (cliente_id, equipo_id, datos_fiscales_empresa_id, numero_factura, subtotal, iva_porcentaje, iva_monto, total, metodo_pago, condicion_venta, fecha_emision)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             $stmt_factura = mysqli_prepare($enlace, $sql_factura);
-            if (!$stmt_factura) throw new Exception("Error al preparar factura: " . mysqli_error($enlace));
+            if (!$stmt_factura) { error_log("Error DB (prepare factura): " . mysqli_error($enlace)); throw new Exception("No se pudo preparar la factura."); }
             mysqli_stmt_bind_param($stmt_factura, "iiisddddss", $cliente_id_form, $equipo_id_form, $datos_fiscales_id_actual, $numero_factura_generado, $subtotal_factura, $iva_porcentaje, $iva_monto, $total_factura, $metodo_pago, $condicion_venta);
-            if (!mysqli_stmt_execute($stmt_factura)) throw new Exception("Error al guardar factura: " . mysqli_stmt_error($stmt_factura));
+            if (!mysqli_stmt_execute($stmt_factura)) { error_log("Error DB (execute factura): " . mysqli_stmt_error($stmt_factura) . " | General: " . mysqli_error($enlace)); throw new Exception("No se pudo guardar la factura."); }
             $nueva_factura_id = mysqli_insert_id($enlace);
             mysqli_stmt_close($stmt_factura);
 
             // 5. Insertar en `factura_items`
             $sql_item = "INSERT INTO factura_items (factura_id, descripcion, cantidad, precio_unitario, subtotal_item) VALUES (?, ?, ?, ?, ?)";
             $stmt_item = mysqli_prepare($enlace, $sql_item);
-            if (!$stmt_item) throw new Exception("Error al preparar items de factura: " . mysqli_error($enlace));
+            if (!$stmt_item) { error_log("Error DB (prepare factura_items): " . mysqli_error($enlace)); throw new Exception("No se pudieron preparar los items de la factura."); }
 
             foreach ($descripciones as $key => $desc) {
                 $cant = (int)$cantidades[$key];
@@ -142,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($desc) && $cant > 0 && $pu >= 0) {
                     $sub_item = $cant * $pu;
                     mysqli_stmt_bind_param($stmt_item, "isidd", $nueva_factura_id, $desc, $cant, $pu, $sub_item);
-                    if (!mysqli_stmt_execute($stmt_item)) throw new Exception("Error al guardar item de factura: " . mysqli_stmt_error($stmt_item));
+                    if (!mysqli_stmt_execute($stmt_item)) { error_log("Error DB (execute factura_items): " . mysqli_stmt_error($stmt_item) . " | General: " . mysqli_error($enlace)); throw new Exception("No se pudo guardar un item de la factura."); }
                 }
             }
             mysqli_stmt_close($stmt_item);
@@ -153,12 +158,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (Exception $e) {
             mysqli_rollback($enlace);
-            $mensaje = "<div class='alert alert-danger'>Error al generar la factura: " . $e->getMessage() . "</div>";
+            // El error específico ya fue logueado donde se lanzó la excepción.
+            $mensaje = log_db_error_y_mostrar_mensaje_generico($e->getMessage(), "", "Ocurrió un error al generar la factura. Los cambios han sido revertidos.");
         }
-    } else {
+    } // Cierre del else de validación CSRF
+    if (empty($mensaje) && !empty($error_validacion)) { // Si no hay mensaje de CSRF pero sí de validación
          $mensaje = "<div class='alert alert-danger'>Por favor corrija los errores del formulario.</div>";
-         // Repopular items_factura_temp para mostrar errores
-         $items_factura_temp = [];
+    }
+    // Repopular items_factura_temp para mostrar errores si no es error CSRF
+    // o si es error CSRF pero queremos mantener los datos (aunque puede ser un riesgo si los datos fueron manipulados)
+    // Por seguridad, si es error CSRF, es mejor no repopular con datos del POST o recargar de cero.
+    // Aquí, si hay error CSRF, $items_factura_temp se habrá llenado con los datos del GET inicial (si los hay)
+    // o estará vacío, lo cual es más seguro.
+    // Si el error es de validación (y no CSRF), sí repopulamos.
+    if (strpos($mensaje, "Error de validación CSRF") === false && !empty($error_validacion)) {
+        $items_factura_temp = [];
          foreach ($descripciones as $key => $desc) {
              $items_factura_temp[] = ['descripcion' => $desc, 'cantidad' => $cantidades[$key], 'precio_unitario' => $precios_unitarios[$key]];
          }
@@ -174,6 +188,7 @@ require_once '../includes/header.php';
     <?php if (!empty($mensaje)) echo $mensaje; ?>
 
     <form action="generar_factura.php<?php if($equipo_id) echo '?equipo_id='.$equipo_id; ?>" method="POST" id="form-factura">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <input type="hidden" name="equipo_id_hidden" value="<?php echo htmlspecialchars($equipo_id ?? ''); ?>">
 
         <fieldset class="mb-3 p-3 border">

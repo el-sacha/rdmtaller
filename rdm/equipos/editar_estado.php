@@ -5,6 +5,7 @@ require_once '../includes/db.php';
 
 verificar_login();
 
+$csrf_token = generar_token_csrf();
 $equipo_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $mensaje = '';
 $error_validacion = [];
@@ -33,16 +34,19 @@ $notas_internas_reparacion_actual = '';
 
 // --- Lógica de POST (Actualización de estado y notas) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $equipo_id_post = isset($_POST['equipo_id']) ? (int)$_POST['equipo_id'] : 0;
-    if ($equipo_id_post !== $equipo_id) {
-        $_SESSION['error_accion_equipo'] = "Error: ID de equipo incorrecto en el formulario.";
-        header("Location: listar_equipos.php");
-        return;
-    }
+    if (!isset($_POST['csrf_token']) || !validar_token_csrf($_POST['csrf_token'])) {
+        $mensaje = "<div class='alert alert-danger'>Error de validación CSRF. Inténtelo de nuevo.</div>";
+    } else {
+        $equipo_id_post = isset($_POST['equipo_id']) ? (int)$_POST['equipo_id'] : 0;
+        if ($equipo_id_post !== $equipo_id) {
+            $_SESSION['error_accion_equipo'] = "Error: ID de equipo incorrecto en el formulario.";
+            header("Location: listar_equipos.php");
+            return;
+        }
 
-    $nuevo_estado_id = isset($_POST['estado_reparacion_id']) ? (int)$_POST['estado_reparacion_id'] : '';
-    $nuevas_notas_internas = isset($_POST['notas_internas_reparacion']) ? sanitizar_entrada($_POST['notas_internas_reparacion']) : '';
-    $nota_seguimiento = isset($_POST['nota_seguimiento']) ? sanitizar_entrada($_POST['nota_seguimiento']) : '';
+        $nuevo_estado_id = isset($_POST['estado_reparacion_id']) ? (int)$_POST['estado_reparacion_id'] : '';
+        $nuevas_notas_internas = isset($_POST['notas_internas_reparacion']) ? sanitizar_entrada($_POST['notas_internas_reparacion']) : '';
+        $nota_seguimiento = isset($_POST['nota_seguimiento']) ? sanitizar_entrada($_POST['nota_seguimiento']) : '';
 
 
     if (empty($nuevo_estado_id)) {
@@ -57,20 +61,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 1. Actualizar el equipo
             $sql_update_equipo = "UPDATE equipos SET estado_reparacion_id = ?, notas_internas_reparacion = ? WHERE id = ?";
             $stmt_update = mysqli_prepare($enlace, $sql_update_equipo);
-            if (!$stmt_update) throw new Exception("Error al preparar actualización de equipo: " . mysqli_error($enlace));
+            if (!$stmt_update) {
+                // Loguear mysqli_error($enlace)
+                error_log("Error DB (prepare update equipo): " . mysqli_error($enlace));
+                throw new Exception("No se pudo preparar la actualización del equipo.");
+            }
 
             mysqli_stmt_bind_param($stmt_update, "isi", $nuevo_estado_id, $nuevas_notas_internas, $equipo_id);
-            if (!mysqli_stmt_execute($stmt_update)) throw new Exception("Error al actualizar equipo: " . mysqli_stmt_error($stmt_update));
+            if (!mysqli_stmt_execute($stmt_update)) {
+                 // Loguear mysqli_stmt_error($stmt_update) y mysqli_error($enlace)
+                error_log("Error DB (execute update equipo): " . mysqli_stmt_error($stmt_update) . " | General: " . mysqli_error($enlace));
+                throw new Exception("No se pudo actualizar el equipo.");
+            }
             mysqli_stmt_close($stmt_update);
 
             // 2. Insertar en seguimiento_equipo
             $fecha_actualizacion = date('Y-m-d H:i:s');
             $sql_seguimiento = "INSERT INTO seguimiento_equipo (equipo_id, estado_id, fecha_actualizacion, notas) VALUES (?, ?, ?, ?)";
             $stmt_seguimiento = mysqli_prepare($enlace, $sql_seguimiento);
-            if (!$stmt_seguimiento) throw new Exception("Error al preparar inserción de seguimiento: " . mysqli_error($enlace));
+            if (!$stmt_seguimiento) {
+                error_log("Error DB (prepare seguimiento): " . mysqli_error($enlace));
+                throw new Exception("No se pudo preparar el registro de seguimiento.");
+            }
 
             mysqli_stmt_bind_param($stmt_seguimiento, "iiss", $equipo_id, $nuevo_estado_id, $fecha_actualizacion, $nota_seguimiento);
-            if (!mysqli_stmt_execute($stmt_seguimiento)) throw new Exception("Error al insertar en seguimiento: " . mysqli_stmt_error($stmt_seguimiento));
+            if (!mysqli_stmt_execute($stmt_seguimiento)) {
+                error_log("Error DB (execute seguimiento): " . mysqli_stmt_error($stmt_seguimiento) . " | General: " . mysqli_error($enlace));
+                throw new Exception("No se pudo registrar el seguimiento del equipo.");
+            }
             mysqli_stmt_close($stmt_seguimiento);
 
             // Si todo fue bien, commit
@@ -81,20 +99,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (Exception $e) {
             mysqli_rollback($enlace); // Revertir cambios en caso de error
-            $mensaje = "<div class='alert alert-danger'>Error en la transacción: " . $e->getMessage() . "</div>";
+            // El error ya fue logueado en el punto donde se originó la excepción.
+            // Aquí solo mostramos un mensaje genérico al usuario.
+            $mensaje = log_db_error_y_mostrar_mensaje_generico($e->getMessage(), "", "Ocurrió un error durante la actualización. Los cambios han sido revertidos.");
         }
-    } else {
+    } // Cierre del else de validación CSRF
+    if (empty($mensaje) && !empty($error_validacion)) { // Si no hay mensaje de CSRF pero sí de validación
         $mensaje = "<div class='alert alert-danger'>Por favor corrija los errores del formulario.</div>";
     }
-     // Para mantener los valores en el formulario si hay error
-    $estado_reparacion_id_actual = $nuevo_estado_id;
-    $notas_internas_reparacion_actual = $nuevas_notas_internas;
-}
+     // Para mantener los valores en el formulario si hay error y no es error CSRF
+    if (strpos($mensaje, "Error de validación CSRF") === false) {
+        $estado_reparacion_id_actual = $nuevo_estado_id ?? $estado_reparacion_id_actual; // Mantener el nuevo si ya estaba seteado
+        $notas_internas_reparacion_actual = $nuevas_notas_internas ?? $notas_internas_reparacion_actual;
+    }
+} // Cierre del if POST
 
 
 // --- Lógica de GET (Cargar datos del equipo para editar) ---
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') { // Solo cargar si no es un reintento de POST fallido
-    $sql_select_equipo = "SELECT
+// Se ejecuta si no es POST, o si es POST pero hubo error CSRF (para recargar datos con el mensaje)
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || strpos($mensaje, "Error de validación CSRF") !== false) {
+    // Si es un POST fallido con error CSRF, $estado_reparacion_id_actual, etc., ya tienen los valores del POST
+    // y no queremos sobreescribirlos con los de la BD. Solo cargamos de BD si no es POST o si el error no es de CSRF (para no perder datos ya ingresados).
+    // Sin embargo, si el error es CSRF, es mejor recargar desde la BD para evitar que el form se repopule con datos potencialmente manipulados
+    // o simplemente para asegurar un estado limpio.
+    // Para simplificar: si hay error CSRF, recargamos de la BD. Si es error de validación, los valores POST ya están en las variables.
+    // Si no es POST, cargamos de la BD.
+    // O si es un POST y hubo un error (CSRF o DB), también intentamos recargar los datos originales del equipo si es posible.
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !empty($mensaje)) {
+        // Solo intentar cargar si $equipo_id es válido, para evitar errores si el ID es incorrecto desde el GET
+        if ($equipo_id > 0) {
+            $sql_select_equipo = "SELECT
                             e.id AS equipo_id, e.tipo_equipo, e.marca, e.modelo, e.numero_serie_imei,
                             e.fallas_reportadas, e.estado_fisico, e.observaciones, e.accesorios_entregados,
                             e.fecha_ingreso, e.estado_reparacion_id, e.notas_internas_reparacion,
@@ -136,7 +170,7 @@ require_once '../includes/header.php';
 
     <?php if (!empty($mensaje)) echo $mensaje; ?>
 
-    <?php if (isset($equipo_actual) && $equipo_actual): ?>
+    <?php if (isset($equipo_actual) && $equipo_actual && empty($mensaje) || (isset($equipo_actual) && strpos($mensaje, "Error de validación CSRF") !== false) ): ?>
     <div class="card mb-4">
         <div class="card-header">Información del Equipo</div>
         <div class="card-body">
@@ -151,6 +185,7 @@ require_once '../includes/header.php';
     <?php endif; ?>
 
     <form action="editar_estado.php?id=<?php echo $equipo_id; ?>" method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
         <input type="hidden" name="equipo_id" value="<?php echo $equipo_id; ?>">
 
         <div class="mb-3">
