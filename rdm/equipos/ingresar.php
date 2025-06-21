@@ -129,8 +129,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($mensaje) && !empty($error_validacion)) {
         $mensaje = "<p class='mensaje-error'>Por favor corrija los errores del formulario.</p>";
     }
-} // Closes the `else` block for the CSRF check.
-// The next brace was removed as it was extra.
+} // Closes the `else` block for the CSRF check (C8).
+} // Closes the `if ($_SERVER['REQUEST_METHOD'] === 'POST')` block (C6).
 
 require_once '../includes/header.php';
 ?>
