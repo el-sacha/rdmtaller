@@ -124,11 +124,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if($stmt) mysqli_stmt_close($stmt);
         }
-    } // Cierre del else de validación CSRF
-    if (empty($mensaje) && !empty($error_validacion)) { // Si no hay mensaje de CSRF pero sí de validación
+    } // This actually closes if(empty($error_validacion))
+    // The following 'if' should be inside the CSRF 'else' block.
+    if (empty($mensaje) && !empty($error_validacion)) {
         $mensaje = "<p class='mensaje-error'>Por favor corrija los errores del formulario.</p>";
     }
-}
+} // Closes the `else` block for the CSRF check.
+// The next brace was removed as it was extra.
 
 require_once '../includes/header.php';
 ?>
