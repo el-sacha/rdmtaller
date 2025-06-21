@@ -126,20 +126,26 @@ $js_path_prefix = (in_array($directorio_actual_footer, ['clientes', 'tecnicos', 
 
 $final_bootstrap_js_path = $js_path_prefix . "assets/js/bootstrap.bundle.min.js";
 $final_chart_js_path = $js_path_prefix . "assets/js/chart.umd.min.js";
-$final_custom_js_path = $js_path_prefix . "assets/js/main.js";
-// Para file_exists, necesitamos la ruta desde la raíz del servidor o una ruta relativa al script footer.php
-// Si footer.php está en rdm/includes/
-// Y main.js está en rdm/assets/js/
-// La ruta relativa desde footer.php a main.js es ../assets/js/main.js
-$main_js_check_path_from_footer = dirname(__FILE__) . '/../assets/js/main.js';
+$final_custom_js_path = $js_path_prefix . "assets/js/main.js"; // Original main.js, puede ser removido si ya no se usa.
+$main_js_check_path_from_footer = dirname(__FILE__) . '/../assets/js/main.js'; // Original check path
 
+// Nuevas variables para navbarMenu.js
+$final_navbar_menu_js_path = $js_path_prefix . "assets/js/dist/navbarMenu.js";
+$navbar_menu_js_check_path = dirname(__FILE__) . '/../assets/js/dist/navbarMenu.js';
 
 ?>
 <script src="<?php echo $final_bootstrap_js_path; ?>" defer></script>
 <script src="<?php echo $final_chart_js_path; ?>" defer></script>
 
-<?php if (file_exists($main_js_check_path_from_footer)): ?>
+<?php
+// Mantener el main.js original si existe y se quiere usar para otras cosas, o eliminar este bloque.
+// Por ahora, lo comentaré como ejemplo de posible coexistencia o eliminación.
+/* if (file_exists($main_js_check_path_from_footer)): ?>
     <script src="<?php echo $final_custom_js_path; ?>" defer></script>
+<?php endif; */ ?>
+
+<?php if (file_exists($navbar_menu_js_check_path)): ?>
+    <script src="<?php echo $final_navbar_menu_js_path; ?>" defer></script>
 <?php endif; ?>
 </body>
 </html>
