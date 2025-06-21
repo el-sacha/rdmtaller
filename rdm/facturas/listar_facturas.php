@@ -5,6 +5,15 @@ require_once '../includes/db.php';
 
 verificar_login();
 
+// --- Lógica de autorización ---
+if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'admin') {
+    $_SESSION['mensaje_error_layout'] = 'Acceso denegado. Solo los administradores pueden ver el listado de facturas.';
+    // Asumiendo que listar_facturas.php está en rdm/facturas/, dashboard.php está en rdm/
+    header('Location: ../dashboard.php');
+    return; // Terminar ejecución
+}
+// --- Fin lógica de autorización ---
+
 $termino_busqueda = isset($_GET['q']) ? sanitizar_entrada($_GET['q']) : '';
 $mensaje_accion = ''; // Para mensajes de otras acciones si se implementan
 
